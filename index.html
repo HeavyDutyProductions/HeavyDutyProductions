@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Heavy Duty Productions</title>
+  <style>
+    :root { color-scheme: dark; }
+    /* Overspray font */
+    @font-face {
+      font-family: 'Overspray';
+      src:
+        url('Overspray.woff2') format('woff2'),
+        url('Overspray-PAWZ.ttf') format('truetype'),
+        url('fonts/Overspray.woff2') format('woff2'),
+        url('fonts/Overspray-PAWZ.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    body { margin:0; background:#0f0f10; color:#ececec; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    header { padding:18px 12px; text-align:center; background:#000; border-bottom:1px solid #1d1d1f; }
+    header img { height:64px; display:block; margin:0 auto 6px; }
+    header h1 { margin:4px 0 0; font-family:'Overspray', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; letter-spacing:.6px; font-weight:400; }
+
+    /* Tabs */
+    nav { position:sticky; top:0; z-index:10; display:flex; gap:18px; justify-content:center; align-items:center; padding:10px 12px; background:rgba(20,20,22,.96); border-bottom:1px solid #1f1f22; backdrop-filter: blur(6px); }
+    nav a {
+      text-decoration:none; color:#e8e8e8; padding:8px 10px; border-radius:8px; letter-spacing:.35px;
+      font-family:'Overspray', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; font-size:0.95rem;
+    }
+    nav a[aria-current="page"] { color:#00e5ff; background:#151518; box-shadow: inset 0 0 0 1px #26262a; }
+
+    main { padding:16px; max-width:1200px; margin:0 auto; }
+    h2, p { font-family:'Overspray', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; letter-spacing:.45px; font-weight:400; }
+    #home h2 { margin: 12px 0 6px; }
+    #home p { margin: 0 0 8px; opacity: .9; }
+    #home .hero { display:block; max-width:840px; width:96%; margin:14px auto 0; border-radius:14px; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+
+    .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:14px; }
+    .card { aspect-ratio:1/1; background:#17171a; border-radius:10px; overflow:hidden; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+    .grid img { width:100%; height:100%; object-fit:cover; display:block; }
+
+    .empty { text-align:center; opacity:.9; padding:28px 10px; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="heavy-duty.png" alt="Heavy Duty Productions Logo">
+    <h1>Heavy Duty Productions</h1>
+  </header>
+
+  <nav aria-label="Primary">
+    <a class="tab" href="#/">HOME</a>
+    <a class="tab" href="#/hoodies">HOODIES</a>
+    <a class="tab" href="#/tshirts">T-SHIRTS</a>
+    <a class="tab" href="#/production-images">PRODUCTION IMAGES</a>
+  </nav>
+
+  <main>
+    <!-- HOME with welcome message + hero -->
+    <section id="home">
+      <h2>Welcome</h2>
+      <p>Choose a category above to browse images.</p>
+      <img class="hero" src="heavy-duty.png" alt="Heavy Duty Productions Hero">
+    </section>
+
+    <!-- GALLERY -->
+    <section id="gallery" hidden>
+      <div class="grid" id="imageGrid"></div>
+      <div id="emptyMsg" class="empty" hidden>No images found.</div>
+    </section>
+  </main>
+
+  <script>
+    // Case-sensitive folders at repo root
+    const FOLDERS = {
+      "hoodies": "Hoodies/",
+      "tshirts": "T-Shirts/",
+      "production-images": "Production Images/"
+    };
+
+    // Render-by-attempt for IMG_0001..IMG_9999 (all common extensions). Removes broken ones silently.
+    const EXTS = [".jpg",".jpeg",".png",".webp",".JPG",".JPEG",".PNG",".WEBP"];
+    const MAX_INDEX = 9999; // <-- full range
+    const BUILD = Date.now(); // cache-bust
+
+    const home = document.getElementById("home");
+    const gallery = document.getElementById("gallery");
+    const grid = document.getElementById("imageGrid");
+    const emptyMsg = document.getElementById("emptyMsg");
+
+    function setActive(route){
+      document.querySelectorAll("nav a.tab").forEach(a => {
+        if (a.getAttribute("href") === route) a.setAttribute("aria-current","page");
+        else a.removeAttribute("aria-current");
+      });
+    }
+
+    function encPath(path){
+      return path.split("/").filter(Boolean).map(encodeURIComponent).join("/") + (path.endsWith("/")?"/":"");
+    }
+
+    function addImage(url){
+      const img = document.createElement("img");
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.alt = url.split("/").pop();
+      img.src = url;
+      img.onerror = () => {
+        const card = img.parentElement;
+        if (card) card.remove();
+      };
+      const card = document.createElement("div");
+      card.className = "card";
+      card.appendChild(img);
+      grid.appendChild(card);
+    }
+
+    function renderFolder(folderRaw){
+      grid.innerHTML = "";
+      const folder = encPath(folderRaw);
+      for (let i = 1; i <= MAX_INDEX; i++){
+        const base = "IMG_" + String(i).padStart(4,"0");
+        for (const ext of EXTS){
+          const url = `${folder}${base}${ext}?v=${BUILD}`;
+          addImage(url);
+        }
+      }
+      // If everything was removed by onerror, show empty message after a short delay
+      setTimeout(() => {
+        emptyMsg.hidden = grid.children.length > 0;
+      }, 800);
+    }
+
+    function route(){
+      const hash = (location.hash || "#/");
+      setActive(hash);
+      if (hash === "#/" || hash === "#"){
+        home.hidden = false; gallery.hidden = true; return;
+      }
+      emptyMsg.hidden = true;
+      home.hidden = true; gallery.hidden = false;
+      if (hash.startsWith("#/hoodies")) return renderFolder(FOLDERS["hoodies"]);
+      if (hash.startsWith("#/tshirts")) return renderFolder(FOLDERS["tshirts"]);
+      if (hash.startsWith("#/production-images")) return renderFolder(FOLDERS["production-images"]);
+      // default
+      home.hidden = false; gallery.hidden = true;
+    }
+
+    document.addEventListener("DOMContentLoaded", route);
+    window.addEventListener("hashchange", route);
+  </script>
+</body>
+</html>
