@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Heavy Duty Productions</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin:0; background:#111; color:#eee; }
+    header { padding:1rem; text-align:center; background:#000; }
+    header img { height:60px; }
+    nav { display:flex; justify-content:center; gap:2rem; background:#222; padding:0.5rem; position:sticky; top:0; z-index:10; flex-wrap:nowrap; }
+
+    /* Overspray font */
+    @font-face {
+      font-family: 'Overspray';
+      src: url('Overspray.woff2') format('woff2'),
+           url('Overspray-PAWZ.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    nav a { 
+      color:#eee; 
+      text-decoration:none; 
+      font-family: 'Overspray', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      font-size:0.85rem;
+      font-weight:normal;
+      letter-spacing:0.3px;
+      white-space:nowrap;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+    }
+    nav a[aria-current="page"] { color:#00e5ff; }
+
+    main { padding:1rem; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; }
+    .card { aspect-ratio: 1/1; background:#1b1b1b; border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; }
+    .card .ph { width:40%; height:40%; border-radius:6px; background:#2a2a2a; animation:pulse 1.2s infinite ease-in-out; }
+    @keyframes pulse { 0%{opacity:0.6} 50%{opacity:1} 100%{opacity:0.6} }
+    .grid img { width:100%; height:100%; object-fit:cover; cursor:pointer; display:block; }
+    .modal { position:fixed; inset:0; background:rgba(0,0,0,0.92); display:none; align-items:center; justify-content:center; }
+    .modal img { max-width:90vw; max-height:85vh; border-radius:8px; }
+    .modal.show { display:flex; }
+    .close { position:absolute; top:1rem; right:2rem; font-size:2rem; color:#fff; cursor:pointer; }
+    .empty { opacity:0.85; text-align:center; padding:2rem; }
+    .actions { text-align:center; margin:1.5rem 0; }
+    .btn { background:#2a2a2a; color:#eee; border:1px solid #333; padding:0.6rem 1rem; border-radius:8px; cursor:pointer; }
+    .btn:hover { background:#333; }
+
+    /* Apply Overspray to header title + Home copy */
+    [data-view="home"] h1,
+    [data-view="home"] h2,
+    [data-view="home"] p,
+    header h1 {
+      font-family: 'Overspray', system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      letter-spacing: 0.5px;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+    }
+
+    /* Transparent PNGs on light gray in grid + modal */
+    .grid img[src$=".png"],
+    .grid img[src$=".PNG"],
+    .modal img[src$=".png"],
+    .modal img[src$=".PNG"] {
+      background: #ccc;
+      border-radius: 8px;
+    }
+
+    /* Home hero image */
+    #home .hero {
+      display: block;
+      max-width: 720px;
+      width: 94%;
+      margin: 2rem auto 0 auto;
+      border-radius: 12px;
+    }
+
+    /* Responsive adjustments */
+    @media (max-width: 600px) {
+      nav { gap: 0.5rem; padding: 0.35rem; }
+      nav a { font-size: 0.7rem; letter-spacing: 0.2px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="heavy-duty.png" alt="Heavy Duty Productions Logo" id="brandLogo">
+    <h1>Heavy Duty Productions</h1>
+  </header>
+
+  <nav aria-label="Sections">
+    <a class="tab" data-route="/" href="#/">HOME</a>
+    <a class="tab" data-route="/hoodies" href="#/hoodies">HOODIES</a>
+    <a class="tab" data-route="/tshirts" href="#/tshirts">T-SHIRTS</a>
+    <a class="tab" data-route="/production-images" href="#/production-images">PRODUCTION IMAGES</a>
+  </nav>
+
+  <main>
+    <!-- Home (static placeholder) -->
+    <section id="home" data-view="home">
+      <h2>Welcome to Heavy Duty Productions</h2>
+      <p>Choose a category above to browse images.</p>
+      <img src="heavy-duty.png" alt="Heavy Duty Productions" class="hero">
+    </section>
+
+    <!-- Image grid -->
+    <section id="grid" hidden>
+      <div class="grid" id="imageGrid"></div>
+      <div class="actions" id="actions" hidden>
+        <button class="btn" id="loadMore">Load more</button>
+      </div>
+      <div class="empty" id="emptyMsg" hidden>No images found in this folder.</div>
+      <div id="sentinel" style="height:1px;"></div>
+    </section>
+  </main>
+
+  <!-- Modal viewer -->
+  <div class="modal" id="modal">
+    <span class="close" id="closeBtn">&times;</span>
+    <img id="modalImg" src="" alt="">
+  </div>
+
+  <script>
+    // ------ DOM refs ------
+    const grid = document.getElementById("grid");
+    const imageGrid = document.getElementById("imageGrid");
+    const emptyMsg = document.getElementById("emptyMsg");
+    const actions = document.getElementById("actions");
+    const loadMoreBtn = document.getElementById("loadMore");
+    const sentinel = document.getElementById("sentinel");
+    const home = document.getElementById("home");
+    const modal = document.getElementById("modal");
+    const modalImg = document.getElementById("modalImg");
+    const closeBtn = document.getElementById("closeBtn");
+
+    // ------ Config you asked for ------
+    const CATEGORIES = {
+      hoodies: "Hoodies/",
+      tshirts: "T-Shirts/",
+      "production-images": "Production Images/"
+    };
+    const EXTS = [".jpg",".jpeg",".png",".webp",".JPG",".JPEG",".PNG",".WEBP"];
+    const START = 1, END = 9999;
+
+    // Performance knobs (no visual changes)
+    const BATCH_FIRST = 18;   // first render size
+    const BATCH_NEXT  = 36;   // subsequent batches
+    const CONCURRENCY = 4;    // parallel image loads
+
+    let currentCat = null;
+    let fileList = [];         // discovered filenames
+    let page = 0;
+    let observer = null;
+    let loaderObserver = null;
+    let abortLoad = 0;
+
+    // ------ Lightbox ------
+    function showModal(src){ modalImg.src = src; modal.classList.add("show"); }
+    function closeModal(){ modal.classList.remove("show"); modalImg.src = ""; }
+    closeBtn.onclick = closeModal;
+    modal.onclick = e => { if(e.target===modal) closeModal(); };
+    window.addEventListener("keydown", e => { if(e.key==="Escape") closeModal(); });
+
+    function clearGrid(){
+      imageGrid.innerHTML = "";
+      emptyMsg.hidden = true;
+      actions.hidden = true;
+      page = 0;
+      fileList = [];
+      if (observer) { observer.disconnect(); observer = null; }
+      if (loaderObserver) { loaderObserver.disconnect(); loaderObserver = null; }
+      abortLoad++;
+    }
+
+    // Encode path segments (handles spaces like "Production Images")
+    function encPath(path){
+      return path.split("/").filter(Boolean).map(encodeURIComponent).join("/") + (path.endsWith("/")?"/":"");
+    }
+
+    // ------- Probe by filename pattern (no API dependency) -------
+    function preload(src){
+      return new Promise(resolve => {
+        const img = new Image();
+        img.onload = () => resolve(true);
+        img.onerror = () => resolve(false);
+        img.decoding = "async";
+        img.src = src;
+      });
+    }
+
+    async function firstExistingForIndex(folder, i){
+      const num = String(i).padStart(4, "0");
+      for (const ext of EXTS){
+        const src = `${folder}IMG_${num}${ext}`;
+        if (await preload(src)) return `IMG_${num}${ext}`;
+      }
+      return null;
+    }
+
+    async function discoverFiles(folder){
+      // Seed scan to find where files exist quickly
+      const seeds = [];
+      for (let i = START; i <= END; i += 50){
+        const hit = await firstExistingForIndex(folder, i);
+        if (hit){ seeds.push(i); if (seeds.length >= 6) break; }
+      }
+      if (seeds.length === 0){
+        for (let i = START; i <= END; i += 10){
+          const hit = await firstExistingForIndex(folder, i);
+          if (hit){ seeds.push(i); if (seeds.length >= 3) break; }
+        }
+      }
+      if (seeds.length === 0) return [];
+
+      // Expand around seeds to collect names
+      const found = new Set();
+      for (const center of seeds){
+        const start = Math.max(START, center - 120);
+        const stop  = Math.min(END,   center + 120);
+        for (let i = start; i <= stop; i++){
+          const num = String(i).padStart(4, "0");
+          for (const ext of EXTS){
+            const name = `IMG_${num}${ext}`;
+            const ok = await preload(`${folder}${name}`);
+            if (ok){ found.add(name); break; }
+          }
+        }
+      }
+      // Prefer jpg, then webp, then png (smaller first)
+      const arr = Array.from(found);
+      const weight = n => (/\.jpe?g$/i.test(n) ? 0 : /\.webp$/i.test(n) ? 1 : 2);
+      return arr.sort((a,b) => weight(a)-weight(b) || a.localeCompare(b));
+    }
+
+    // ------ Card builder (with placeholder) ------
+    function buildCard(src){
+      const card = document.createElement('div');
+      card.className = 'card';
+      const ph = document.createElement('div');
+      ph.className = 'ph';
+      card.appendChild(ph);
+      const img = document.createElement('img');
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      img.alt = src.split('/').pop();
+      img.style.display = 'none';
+      img.addEventListener('load', ()=>{ ph.remove(); img.style.display='block'; });
+      img.addEventListener('error', ()=>{ ph.style.animation='none'; ph.style.opacity='0.3'; img.remove(); });
+      img.addEventListener('click', ()=> showModal(src));
+      card._img = img;
+      card._src = src;
+      card.appendChild(img);
+      return card;
+    }
+
+    function ensureObservers(currentAbort){
+      if (!('IntersectionObserver' in window)){
+        // Fallback: load everything immediately
+        document.querySelectorAll('.card').forEach(c => { const img = c._img || c.querySelector('img'); if (img && !img.src) img.src = c._src; });
+        return;
+      }
+      if (!observer){
+        let inFlight = 0;
+        const queue = [];
+        async function pump(){
+          if (abortLoad !== currentAbort) return;
+          while(inFlight < CONCURRENCY && queue.length){
+            const img = queue.shift();
+            inFlight++;
+            img.src = img.parentElement._src;
+            img.onload = img.onerror = () => { inFlight--; pump(); };
+          }
+        }
+        observer = new IntersectionObserver((entries)=>{
+          entries.forEach(e=>{
+            if (e.isIntersecting){
+              const img = e.target._img || e.target.querySelector('img');
+              if (img && !img.src){
+                queue.push(img);
+                pump();
+                observer.unobserve(e.target);
+              }
+            }
+          });
+        }, { rootMargin: '800px', threshold: 0.01 });
+      }
+      if (!loaderObserver){
+        loaderObserver = new IntersectionObserver((entries)=>{
+          entries.forEach(async e=>{
+            if (e.isIntersecting){
+              loaderObserver.unobserve(e.target);
+              await loadBatch(currentCat);
+            }
+          });
+        }, { rootMargin: '800px', threshold: 0.01 });
+      }
+    }
+
+    async function loadBatch(cat){
+      const folderRaw = CATEGORIES[cat];
+      const folder = encPath(folderRaw);
+      const currentAbort = abortLoad;
+      const size = page === 0 ? BATCH_FIRST : BATCH_NEXT;
+      const start = page === 0 ? 0 : (BATCH_FIRST + (page-1)*BATCH_NEXT);
+      const end = Math.min(start + size, fileList.length);
+      if (start >= end) return;
+
+      const slice = fileList.slice(start, end);
+      const cards = slice.map(name => buildCard(`${folder}${name}`));
+      cards.forEach(c => imageGrid.appendChild(c));
+
+      // First screen should paint immediately
+      if (page === 0){
+        cards.slice(0, 12).forEach(c => {
+          const img = c._img || c.querySelector('img');
+          if (img && !img.src){ img.fetchPriority = 'high'; img.src = c._src; }
+        });
+      }
+
+      ensureObservers(currentAbort);
+      if (observer) cards.forEach(c => observer.observe(c));
+      else { cards.forEach(c => { const img = c._img || c.querySelector('img'); if (img && !img.src) img.src = c._src; }); }
+
+      // Safety net: ensure nothing keeps pulsing
+      setTimeout(()=>{ cards.forEach(c => { const img = c._img || c.querySelector('img'); if (img && !img.src) img.src = c._src; }); }, 300);
+
+      page++;
+      const more = (BATCH_FIRST + (page-1)*BATCH_NEXT) < fileList.length;
+      actions.hidden = !more;
+      if (more) loaderObserver.observe(sentinel);
+    }
+
+    async function loadCategory(cat){
+      clearGrid();
+      currentCat = cat;
+      if (!cat){ home.hidden = false; grid.hidden = true; return; }
+      home.hidden = true; grid.hidden = false;
+
+      // Always discover via probing (no API dependency)
+      const folder = encPath(CATEGORIES[cat]);
+      fileList = await discoverFiles(folder);
+
+      if (!fileList.length){ emptyMsg.hidden = false; return; }
+      await loadBatch(cat);
+      actions.hidden = (BATCH_FIRST >= fileList.length);
+    }
+
+    function route(){
+      const hash = location.hash.replace(/^#/,"") || "/";
+      document.querySelectorAll(".tab").forEach(a=>a.removeAttribute("aria-current"));
+      const active = document.querySelector(`.tab[href="#${hash}"]`);
+      if (active) active.setAttribute("aria-current","page");
+
+      if (hash === "/" || hash === "") loadCategory(null);
+      else if (hash.startsWith("/hoodies")) loadCategory("hoodies");
+      else if (hash.startsWith("/tshirts") || hash.startsWith("/t-shirts")) loadCategory("tshirts");
+      else if (hash.startsWith("/production-images")) loadCategory("production-images");
+      else loadCategory(null);
+    }
+
+    // Robust routing hooks (no visual change)
+    function safeRoute(){ try { route(); } catch(e){ console.error(e); } }
+    document.addEventListener("DOMContentLoaded", safeRoute);
+    window.addEventListener("load", safeRoute);
+    window.addEventListener("hashchange", safeRoute);
+    document.querySelectorAll('nav a.tab').forEach(a=> a.addEventListener('click', ()=> setTimeout(safeRoute,0)));
+  </script>
+</body>
+</html>
