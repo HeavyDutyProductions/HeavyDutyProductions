@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Heavy Duty Productions</title>
+  <style>
+    :root { color-scheme: dark; }
+    /* Overspray font */
+    @font-face {
+      font-family: 'Overspray';
+      src:
+        url('Overspray.woff2') format('woff2'),
+        url('Overspray-PAWZ.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin:0; background:#111; color:#eee; }
+    header { padding:1rem; text-align:center; background:#000; }
+    header img { height:60px; }
+    header h1 { font-family: 'Overspray', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin:.5rem 0 0; letter-spacing:.5px; }
+    nav { display:flex; justify-content:center; gap:1rem; background:#222; padding:.5rem; position:sticky; top:0; z-index:10; }
+    nav a { color:#eee; text-decoration:none; font-size:.95rem; letter-spacing:.3px; white-space:nowrap; padding:.35rem .6rem; border-radius:8px;
+            font-family: 'Overspray', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    nav a[aria-current="page"] { color:#00e5ff; background:#1a1a1a; }
+    main { padding:1rem; }
+    h2, p { font-family: 'Overspray', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; letter-spacing:.4px; }
+    #home .hero { display:block; max-width:720px; width:94%; margin:2rem auto 0; border-radius:12px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; }
+    .card { aspect-ratio: 1/1; background:#1b1b1b; border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; }
+    .grid img { width:100%; height:100%; object-fit:cover; display:block; }
+    .empty { opacity:.85; text-align:center; padding:2rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="heavy-duty.png" alt="Heavy Duty Productions Logo" id="brandLogo">
+    <h1>Heavy Duty Productions</h1>
+  </header>
+
+  <nav aria-label="Sections">
+    <a class="tab" href="#/">HOME</a>
+    <a class="tab" href="#/hoodies">HOODIES</a>
+    <a class="tab" href="#/tshirts">T-SHIRTS</a>
+    <a class="tab" href="#/production-images">PRODUCTION IMAGES</a>
+  </nav>
+
+  <main>
+    <section id="home">
+      <h2>Welcome</h2>
+      <p>Choose a category above to browse images.</p>
+      <img class="hero" src="heavy-duty.png" alt="Heavy Duty Productions Hero">
+    </section>
+
+    <section id="grid" hidden>
+      <div class="grid" id="imageGrid"></div>
+      <div class="empty" id="emptyMsg" hidden>No images found. Add a manifest.json in the folder.</div>
+    </section>
+  </main>
+
+  <script>
+    // Exact, case-sensitive folders at repo root:
+    const FOLDERS = {
+      "hoodies": "Hoodies/manifest.json",
+      "tshirts": "T-Shirts/manifest.json",
+      "production-images": "Production Images/manifest.json"
+    };
+
+    const home = document.getElementById("home");
+    const grid = document.getElementById("grid");
+    const imageGrid = document.getElementById("imageGrid");
+    const emptyMsg = document.getElementById("emptyMsg");
+
+    function setActive(hash){
+      document.querySelectorAll("nav a.tab").forEach(a => {
+        if (a.getAttribute("href") === hash) a.setAttribute("aria-current", "page");
+        else a.removeAttribute("aria-current");
+      });
+    }
+
+    async function loadManifest(url){
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) return [];
+        const arr = await res.json();
+        return Array.isArray(arr) ? arr : [];
+      } catch { return []; }
+    }
+
+    function renderFiles(folderPath, files){
+      imageGrid.innerHTML = "";
+      if (!files.length){
+        emptyMsg.hidden = false;
+        return;
+      }
+      emptyMsg.hidden = true;
+      const base = folderPath.replace(/manifest\.json$/, "");
+      for (const name of files){
+        const img = document.createElement("img");
+        img.loading = "lazy";
+        img.decoding = "async";
+        img.alt = name;
+        img.src = base + encodeURIComponent(name);
+        const card = document.createElement("div");
+        card.className = "card";
+        card.appendChild(img);
+        imageGrid.appendChild(card);
+      }
+    }
+
+    async function route(){
+      const hash = location.hash || "#/";
+      setActive(hash);
+      if (hash === "#/" || hash === "#"){
+        home.hidden = false; grid.hidden = true; return;
+      }
+      let key = null;
+      if (hash.startsWith("#/hoodies")) key = "hoodies";
+      else if (hash.startsWith("#/tshirts")) key = "tshirts";
+      else if (hash.startsWith("#/production-images")) key = "production-images";
+      if (!key){ home.hidden = false; grid.hidden = true; return; }
+
+      home.hidden = true; grid.hidden = false;
+      imageGrid.innerHTML = "";
+      emptyMsg.hidden = true;
+      const manifestPath = FOLDERS[key];
+      const files = await loadManifest(manifestPath);
+      renderFiles(manifestPath, files);
+    }
+
+    document.addEventListener("DOMContentLoaded", route);
+    window.addEventListener("hashchange", route);
+  </script>
+</body>
+</html>
