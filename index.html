@@ -137,7 +137,7 @@
     const modalImg = document.getElementById("modalImg");
     const closeBtn = document.getElementById("closeBtn");
 
-    // ------ Config you asked for ------
+    // ------ Config ------
     const CATEGORIES = {
       hoodies: "Hoodies/",
       tshirts: "T-Shirts/",
@@ -146,13 +146,13 @@
     const EXTS = [".jpg",".jpeg",".png",".webp",".JPG",".JPEG",".PNG",".WEBP"];
     const START = 1, END = 9999;
 
-    // Performance knobs (no visual changes)
-    const BATCH_FIRST = 18;   // first render size
-    const BATCH_NEXT  = 36;   // subsequent batches
-    const CONCURRENCY = 4;    // parallel image loads
+    // Performance knobs
+    const BATCH_FIRST = 18;
+    const BATCH_NEXT  = 36;
+    const CONCURRENCY = 4;
 
     let currentCat = null;
-    let fileList = [];         // discovered filenames
+    let fileList = [];
     let page = 0;
     let observer = null;
     let loaderObserver = null;
@@ -181,7 +181,20 @@
       return path.split("/").filter(Boolean).map(encodeURIComponent).join("/") + (path.endsWith("/")?"/":"");
     }
 
-    // ------- Probe by filename pattern (no API dependency) -------
+    // --------- NEW: Try backend API first, then fallback probing ----------
+    async function listFilesFromApi(folderRaw){
+      try{
+        const q = encodeURIComponent(folderRaw);
+        const res = await fetch(`/api/images?folder=${q}`, { cache: 'no-store' });
+        if(!res.ok) return [];
+        const data = await res.json();
+        if(!data || !Array.isArray(data.files)) return [];
+        // keep only known image extensions
+        return data.files.filter(n => /\.(png|jpe?g|webp|gif|svg)$/i.test(n));
+      }catch{ return []; }
+    }
+
+    // ------- Probe by filename pattern (fallback, no API dependency) -------
     function preload(src){
       return new Promise(resolve => {
         const img = new Image();
@@ -201,8 +214,7 @@
       return null;
     }
 
-    async function discoverFiles(folder){
-      // Seed scan to find where files exist quickly
+    async function discoverFilesByProbing(folder){
       const seeds = [];
       for (let i = START; i <= END; i += 50){
         const hit = await firstExistingForIndex(folder, i);
@@ -216,7 +228,6 @@
       }
       if (seeds.length === 0) return [];
 
-      // Expand around seeds to collect names
       const found = new Set();
       for (const center of seeds){
         const start = Math.max(START, center - 120);
@@ -230,7 +241,6 @@
           }
         }
       }
-      // Prefer jpg, then webp, then png (smaller first)
       const arr = Array.from(found);
       const weight = n => (/\.jpe?g$/i.test(n) ? 0 : /\.webp$/i.test(n) ? 1 : 2);
       return arr.sort((a,b) => weight(a)-weight(b) || a.localeCompare(b));
@@ -259,7 +269,6 @@
 
     function ensureObservers(currentAbort){
       if (!('IntersectionObserver' in window)){
-        // Fallback: load everything immediately
         document.querySelectorAll('.card').forEach(c => { const img = c._img || c.querySelector('img'); if (img && !img.src) img.src = c._src; });
         return;
       }
@@ -313,7 +322,6 @@
       const cards = slice.map(name => buildCard(`${folder}${name}`));
       cards.forEach(c => imageGrid.appendChild(c));
 
-      // First screen should paint immediately
       if (page === 0){
         cards.slice(0, 12).forEach(c => {
           const img = c._img || c.querySelector('img');
@@ -325,7 +333,6 @@
       if (observer) cards.forEach(c => observer.observe(c));
       else { cards.forEach(c => { const img = c._img || c.querySelector('img'); if (img && !img.src) img.src = c._src; }); }
 
-      // Safety net: ensure nothing keeps pulsing
       setTimeout(()=>{ cards.forEach(c => { const img = c._img || c.querySelector('img'); if (img && !img.src) img.src = c._src; }); }, 300);
 
       page++;
@@ -334,15 +341,23 @@
       if (more) loaderObserver.observe(sentinel);
     }
 
+    async function getFiles(folderRaw){
+      // 1) Try backend API
+      const apiFiles = await listFilesFromApi(folderRaw);
+      if (apiFiles.length) return apiFiles;
+
+      // 2) Fallback to probing IMG_0001.* pattern in the static folder
+      const folder = encPath(folderRaw);
+      return await discoverFilesByProbing(folder);
+    }
+
     async function loadCategory(cat){
       clearGrid();
       currentCat = cat;
       if (!cat){ home.hidden = false; grid.hidden = true; return; }
       home.hidden = true; grid.hidden = false;
 
-      // Always discover via probing (no API dependency)
-      const folder = encPath(CATEGORIES[cat]);
-      fileList = await discoverFiles(folder);
+      fileList = await getFiles(CATEGORIES[cat]);
 
       if (!fileList.length){ emptyMsg.hidden = false; return; }
       await loadBatch(cat);
@@ -362,7 +377,6 @@
       else loadCategory(null);
     }
 
-    // Robust routing hooks (no visual change)
     function safeRoute(){ try { route(); } catch(e){ console.error(e); } }
     document.addEventListener("DOMContentLoaded", safeRoute);
     window.addEventListener("load", safeRoute);
