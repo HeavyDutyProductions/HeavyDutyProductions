@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Heavy Duty Productions</title>
+  <style>
+    :root { color-scheme: dark; }
+    /* Overspray font */
+    @font-face {
+      font-family: 'Overspray';
+      src:
+        url('Overspray.woff2') format('woff2'),
+        url('Overspray-PAWZ.ttf') format('truetype'),
+        url('fonts/Overspray.woff2') format('woff2'),
+        url('fonts/Overspray-PAWZ.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    body { margin:0; background:#0f0f10; color:#ececec; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    header { padding:18px 12px; text-align:center; background:#000; border-bottom:1px solid #1d1d1f; }
+    header img { height:64px; display:block; margin:0 auto 6px; }
+    header h1 { margin:4px 0 0; font-family:'Overspray', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; letter-spacing:.6px; font-weight:400; }
+
+    /* Tabs */
+    nav { position:sticky; top:0; z-index:10; display:flex; gap:18px; justify-content:center; align-items:center; padding:10px 12px; background:rgba(20,20,22,.96); border-bottom:1px solid #1f1f22; backdrop-filter: blur(6px); }
+    nav a {
+      text-decoration:none; color:#e8e8e8; padding:8px 10px; border-radius:8px; letter-spacing:.35px;
+      font-family:'Overspray', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; font-size:0.95rem;
+    }
+    nav a[aria-current="page"] { color:#00e5ff; background:#151518; box-shadow: inset 0 0 0 1px #26262a; }
+
+    main { padding:16px; max-width:1200px; margin:0 auto; }
+    h2, p { font-family:'Overspray', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; letter-spacing:.45px; font-weight:400; }
+    #home h2 { margin: 12px 0 6px; }
+    #home p { margin: 0 0 8px; opacity: .9; }
+    #home .hero { display:block; max-width:840px; width:96%; margin:14px auto 0; border-radius:14px; box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+
+    .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:14px; }
+    .card { aspect-ratio:1/1; background:#17171a; border-radius:10px; overflow:hidden; box-shadow: 0 2px 10px rgba(0,0,0,.25); }
+    .grid img { width:100%; height:100%; object-fit:cover; display:block; }
+
+    .status { text-align:center; opacity:.9; padding:18px 10px; font-size:0.95rem; }
+    .hidden { display:none; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="heavy-duty.png" alt="Heavy Duty Productions Logo">
+    <h1>Heavy Duty Productions</h1>
+  </header>
+
+  <nav aria-label="Primary">
+    <a class="tab" href="#/">HOME</a>
+    <a class="tab" href="#/hoodies">HOODIES</a>
+    <a class="tab" href="#/tshirts">T-SHIRTS</a>
+    <a class="tab" href="#/production-images">PRODUCTION IMAGES</a>
+  </nav>
+
+  <main>
+    <!-- HOME with welcome message + hero -->
+    <section id="home">
+      <h2>Welcome</h2>
+      <p>Choose a category above to browse images.</p>
+      <img class="hero" src="heavy-duty.png" alt="Heavy Duty Productions Hero">
+    </section>
+
+    <!-- GALLERY -->
+    <section id="gallery" class="hidden">
+      <div id="status" class="status">Loading…</div>
+      <div class="grid" id="imageGrid"></div>
+      <div id="emptyMsg" class="status hidden">No images found.</div>
+    </section>
+  </main>
+
+  <script>
+    // RELATIVE, CASE-SENSITIVE folder paths for GitHub Pages
+    const FOLDERS = {
+      hoodies: "./Hoodies/",
+      tshirts: "./T-Shirts/",
+      "production-images": "./Production Images/"
+    };
+
+    // Typical camera extensions first
+    const EXTS = [".JPG",".jpg",".JPEG",".jpeg",".PNG",".png",".webp"];
+    const MAX_INDEX = 9999;
+    const BUILD = Date.now();
+    const PARALLEL = 6;          // limited concurrency
+    const GAP_AFTER_HITS = 12;   // stop after 12 misses once we've started finding images
+
+    const home = document.getElementById("home");
+    const gallery = document.getElementById("gallery");
+    const grid = document.getElementById("imageGrid");
+    const status = document.getElementById("status");
+    const emptyMsg = document.getElementById("emptyMsg");
+
+    function setActive(route){
+      document.querySelectorAll("nav a.tab").forEach(a => {
+        if (a.getAttribute("href") === route) a.setAttribute("aria-current","page");
+        else a.removeAttribute("aria-current");
+      });
+    }
+
+    function encPath(path){
+      return path.split("/").filter(Boolean).map(encodeURIComponent).join("/") + (path.endsWith("/")?"/":"");
+    }
+
+    function addCard(url){
+      const img = document.createElement("img");
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.alt = url.split("/").pop();
+      img.src = url;
+      const card = document.createElement("div");
+      card.className = "card";
+      card.appendChild(img);
+      grid.appendChild(card);
+    }
+
+    // Try this index with common extensions; return first hit or null
+    async function tryIndex(folderEnc, i){
+      const base = "IMG_" + String(i).padStart(4,"0");
+      for (const ext of EXTS){
+        const url = `${folderEnc}${base}${ext}?v=${BUILD}`;
+        const ok = await new Promise(res => {
+          const im = new Image();
+          im.onload = () => res(true);
+          im.onerror = () => res(false);
+          im.decoding = "async";
+          im.src = url;
+        });
+        if (ok) return url;
+      }
+      return null;
+    }
+
+    async function scanFolder(folderRaw){
+      const folderEnc = encPath(folderRaw);
+      grid.innerHTML = "";
+      status.classList.remove("hidden");
+      emptyMsg.classList.add("hidden");
+
+      let next = 1;
+      let hits = 0;
+      let misses = 0;
+      let stop = false;
+
+      async function worker(){
+        while (!stop && next <= MAX_INDEX){
+          const current = next++;
+          const found = await tryIndex(folderEnc, current);
+          if (found){
+            addCard(found);
+            hits++;
+            misses = 0;
+          } else if (hits > 0){
+            misses++;
+            if (misses >= GAP_AFTER_HITS) stop = true;
+          }
+        }
+      }
+
+      // Kick off a few workers
+      await Promise.all(Array.from({length: PARALLEL}, () => worker()));
+
+      status.classList.add("hidden");
+      if (!hits) emptyMsg.classList.remove("hidden");
+    }
+
+    function showHome(){
+      setActive("#/");
+      home.classList.remove("hidden");
+      gallery.classList.add("hidden");
+    }
+
+    function showGallery(key){
+      home.classList.add("hidden");
+      gallery.classList.remove("hidden");
+      const folder = FOLDERS[key];
+      scanFolder(folder);
+      setActive(`#/${key}`);
+    }
+
+    function route(){
+      const hash = location.hash || "#/";
+      if (hash === "#/" || hash === "#") return showHome();
+      if (hash.startsWith("#/hoodies")) return showGallery("hoodies");
+      if (hash.startsWith("#/tshirts")) return showGallery("tshirts");
+      if (hash.startsWith("#/production-images")) return showGallery("production-images");
+      return showHome();
+    }
+
+    document.addEventListener("DOMContentLoaded", route);
+    window.addEventListener("hashchange", route);
+  </script>
+</body>
+</html>
