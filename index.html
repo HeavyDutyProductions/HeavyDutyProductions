@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Heavy Duty Productions</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin:0; background:#111; color:#eee; }
+    header { padding:1rem; text-align:center; background:#000; }
+    header img { height:60px; }
+    nav { display:flex; justify-content:center; gap:1rem; background:#222; padding:0.5rem; position:sticky; top:0; z-index:10; }
+    nav a { color:#eee; text-decoration:none; font-size:0.9rem; }
+    nav a[aria-current="page"] { color:#00e5ff; }
+    main { padding:1rem; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; }
+    .card { aspect-ratio: 1/1; background:#1b1b1b; border-radius:8px; display:flex; align-items:center; justify-content:center; overflow:hidden; position:relative; }
+    .card .ph { width:40%; height:40%; border-radius:6px; background:#2a2a2a; animation:pulse 1.2s infinite ease-in-out; }
+    @keyframes pulse { 0%{opacity:0.6} 50%{opacity:1} 100%{opacity:0.6} }
+    .grid img { width:100%; height:100%; object-fit:cover; cursor:pointer; display:block; }
+    .modal { position:fixed; inset:0; background:rgba(0,0,0,0.92); display:none; align-items:center; justify-content:center; }
+    .modal img { max-width:90vw; max-height:85vh; border-radius:8px; }
+    .modal.show { display:flex; }
+    .close { position:absolute; top:1rem; right:2rem; font-size:2rem; color:#fff; cursor:pointer; }
+    .empty { opacity:0.85; text-align:center; padding:2rem; }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="heavy-duty.png" alt="Heavy Duty Productions Logo" id="brandLogo">
+    <h1>Heavy Duty Productions</h1>
+  </header>
+
+  <nav aria-label="Sections">
+    <a class="tab" data-route="/" href="#/">HOME</a>
+    <a class="tab" data-route="/hoodies" href="#/hoodies">HOODIES</a>
+    <a class="tab" data-route="/tshirts" href="#/tshirts">T-SHIRTS</a>
+    <a class="tab" data-route="/production-images" href="#/production-images">PRODUCTION IMAGES</a>
+  </nav>
+
+  <main>
+    <section id="home">
+      <h2>Welcome</h2>
+      <p>Choose a category above to browse images.</p>
+    </section>
+
+    <section id="grid" hidden>
+      <div class="grid" id="imageGrid"></div>
+      <div class="empty" id="emptyMsg" hidden>No images found.</div>
+    </section>
+  </main>
+
+  <div class="modal" id="modal">
+    <span class="close" id="closeBtn">&times;</span>
+    <img id="modalImg" src="" alt="">
+  </div>
+
+  <script>
+    // IMPORTANT: GitHub Pages is case-sensitive and served under /<repo>/. Use RELATIVE paths like "images/...".
+    // Exact folder names:
+    const CATEGORIES = {
+      hoodies: "images/Hoodies/",
+      tshirts: "images/T-Shirts/",
+      "production-images": "images/Production Images/"
+    };
+
+    // If you know your file names, list them here per folder to make it 100% reliable.
+    // Otherwise, we try a common numeric pattern like IMG_0001.jpg … IMG_1200.png
+    const MANIFEST = {
+      "images/Hoodies/": [],            // e.g., ["red1.jpg","blue_hoodie.png"]
+      "images/T-Shirts/": [],
+      "images/Production Images/": []
+    };
+
+    const EXTS = [".jpg",".jpeg",".png",".webp",".JPG",".JPEG",".PNG",".WEBP"];
+    const START = 1, END = 2000; // search range if no manifest
+    const BUILD = Date.now();    // cache buster for CDNs/GH Pages
+
+    const home = document.getElementById("home");
+    const grid = document.getElementById("grid");
+    const imageGrid = document.getElementById("imageGrid");
+    const emptyMsg = document.getElementById("emptyMsg");
+    const modal = document.getElementById("modal");
+    const modalImg = document.getElementById("modalImg");
+    const closeBtn = document.getElementById("closeBtn");
+
+    closeBtn.onclick = () => modal.classList.remove("show");
+    modal.onclick = e => { if (e.target === modal) modal.classList.remove("show"); };
+    window.addEventListener("keydown", e => { if (e.key === "Escape") modal.classList.remove("show"); });
+
+    function encPath(path){
+      return path.split("/").filter(Boolean).map(encodeURIComponent).join("/") + (path.endsWith("/")?"/":"");
+    }
+
+    function buildCard(url){
+      const card = document.createElement("div");
+      card.className = "card";
+      const ph = document.createElement("div");
+      ph.className = "ph";
+      const img = document.createElement("img");
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.style.display = "none";
+      img.addEventListener("load", () => { ph.remove(); img.style.display = "block"; });
+      img.addEventListener("error", () => { ph.style.animation="none"; ph.style.opacity="0.3"; img.remove(); });
+      img.addEventListener("click", () => { modalImg.src = url; modal.classList.add("show"); });
+      card._img = img;
+      card._src = url;
+      card.appendChild(ph);
+      card.appendChild(img);
+      return card;
+    }
+
+    function preload(src){
+      return new Promise(res => {
+        const i = new Image();
+        i.onload = () => res(true);
+        i.onerror = () => res(false);
+        i.decoding = "async";
+        i.src = src;
+      });
+    }
+
+    async function probeFolder(folderRaw){
+      const folder = encPath(folderRaw);
+      const found = [];
+      for (let n = 1; n <= END; n++){
+        const num = String(n).padStart(4,"0");
+        let hitName = null;
+        for (const ext of EXTS){
+          const name = `IMG_${num}${ext}`;
+          const url = `${folder}${name}?v=${BUILD}`;
+          // Early break if too many misses in a row to keep it quick
+          const ok = await preload(url);
+          if (ok){ hitName = name; break; }
+        }
+        if (hitName) found.push(hitName);
+        if (found.length >= 200) break; // safety cap
+      }
+      return found;
+    }
+
+    async function getFiles(folder){
+      if (MANIFEST[folder] && MANIFEST[folder].length) return MANIFEST[folder].slice();
+      return await probeFolder(folder);
+    }
+
+    async function loadCategory(key){
+      document.querySelectorAll(".tab").forEach(a=>a.removeAttribute("aria-current"));
+      const active = document.querySelector(`.tab[href="#/${key||""}"]`);
+      if (active) active.setAttribute("aria-current","page");
+
+      if (!key || !CATEGORIES[key]){
+        home.hidden = false; grid.hidden = true;
+        return;
+      }
+
+      home.hidden = true; grid.hidden = false;
+      imageGrid.innerHTML = "";
+      emptyMsg.hidden = true;
+
+      const folder = CATEGORIES[key];
+      const folderEnc = encPath(folder);
+      const files = await getFiles(folder);
+      if (!files.length){ emptyMsg.hidden = false; return; }
+
+      const cards = files.map(name => buildCard(`${folderEnc}${name}?v=${BUILD}`));
+      cards.forEach(c => imageGrid.appendChild(c));
+      // kick off loads
+      cards.slice(0, 24).forEach(c => { const img = c._img; if (img && !img.src) img.src = c._src; });
+      // then the rest
+      setTimeout(() => { cards.forEach(c => { const img = c._img; if (img && !img.src) img.src = c._src; }); }, 100);
+    }
+
+    function route(){
+      const hash = location.hash.replace(/^#/, "") || "/";
+      if (hash === "/" || hash === "") loadCategory(null);
+      else if (hash.startsWith("/hoodies")) loadCategory("hoodies");
+      else if (hash.startsWith("/tshirts") || hash.startsWith("/t-shirts")) loadCategory("tshirts");
+      else if (hash.startsWith("/production-images")) loadCategory("production-images");
+      else loadCategory(null);
+    }
+
+    document.addEventListener("DOMContentLoaded", route);
+    window.addEventListener("hashchange", route);
+  </script>
+</body>
+</html>
