@@ -172,7 +172,7 @@
       const host = location.hostname;
       if(!/github\.io$/i.test(host)) return null;
       const owner = host.split('.')[0];
-      const parts = location.pathname.split('/').filter(Boolean);
+      const parts = location.pathname.split('/').).filter(Boolean);
       const repo = parts[0] || '';
       return { owner, repo };
     }
@@ -269,7 +269,6 @@
     }
 
     function ensureObservers(currentAbort){
-      // Fallback if browser doesn't support IntersectionObserver
       if (!('IntersectionObserver' in window)) {
         document.querySelectorAll('.card').forEach(c => {
           const img = c._img || c.querySelector('img');
@@ -300,7 +299,7 @@
               }
             }
           });
-        }, { rootMargin: '200px' });
+        }, { rootMargin: '300px', threshold: 0.01 });
       }
       if (!loaderObserver && 'IntersectionObserver' in window){
         loaderObserver = new IntersectionObserver((entries)=>{
@@ -310,13 +309,13 @@
               await loadBatch(currentCat);
             }
           });
-        }, { rootMargin: '600px' });
+        }, { rootMargin: '600px', threshold: 0.01 });
       }
     }
 
     async function loadBatch(cat){
       const folderRaw = CATEGORIES[cat];
-      const folder = encPath(folderRaw); // encode spaces like "Production Images"
+      const folder = encPath(folderRaw);
       const currentAbort = abortLoad;
       const size = page === 0 ? BATCH_FIRST : BATCH_NEXT;
       const start = page === 0 ? 0 : (BATCH_FIRST + (page-1)*BATCH_NEXT);
@@ -330,12 +329,18 @@
       ensureObservers(currentAbort);
       if (observer) cards.forEach(c => observer.observe(c));
       else {
-        // If no observer (fallback branch), set src immediately
         cards.forEach(c => {
           const img = c._img || c.querySelector('img');
           if (img && !img.src) img.src = c._src;
         });
       }
+
+      setTimeout(() => {
+        cards.forEach(c => {
+          const img = c._img || c.querySelector('img');
+          if (img && !img.src) img.src = c._src;
+        });
+      }, 1000);
 
       page++;
       const more = (BATCH_FIRST + (page-1)*BATCH_NEXT) < fileList.length;
@@ -355,12 +360,10 @@
       home.hidden = true;
       grid.hidden = false;
 
-      // 1) GitHub API first (fast, exact list; sorted to load JPGs first)
       const apiList = await ghList(cat);
       if (apiList && apiList.length){
         fileList = apiList;
       } else {
-        // 2) fallback: probe (slower, but works anywhere)
         const folder = encPath(CATEGORIES[cat]);
         fileList = await probeAll(folder);
       }
