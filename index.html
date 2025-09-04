@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Heavy Duty Productions</title>
+  <style>
+    :root { color-scheme: dark; }
+    /* Overspray font (WOFF2 first for crisp rendering) */
+    @font-face {
+      font-family: 'Overspray';
+      src:
+        url('Overspray.woff2') format('woff2'),
+        url('Overspray-PAWZ.ttf') format('truetype'),
+        url('fonts/Overspray.woff2') format('woff2'),
+        url('fonts/Overspray-PAWZ.ttf') format('truetype');
+      font-weight: 400;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    /* Global text rendering to reduce distortion */
+    * {
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      text-rendering: optimizeLegibility;
+      font-synthesis: none;
+    }
+
+    body { margin:0; background:#0f0f10; color:#ececec; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    header { padding:18px 12px; text-align:center; background:#000; border-bottom:1px solid #1d1d1f; }
+    header img { height:64px; display:block; margin:0 auto 6px; }
+    header h1 { margin:4px 0 0; font-family:'Overspray', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; letter-spacing:.2px; font-weight:400; }
+
+    /* Tabs */
+    nav { position:sticky; top:0; z-index:10; display:flex; gap:18px; justify-content:center; align-items:center; padding:10px 12px; background:rgba(20,20,22,.96); border-bottom:1px solid #1f1f22; backdrop-filter: blur(6px); }
+    nav a {
+      text-decoration:none; color:#e8e8e8; padding:8px 10px; border-radius:8px; letter-spacing:.2px;
+      font-family:'Overspray', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; font-size:1rem;
+    }
+    nav a[aria-current="page"] { color:#00e5ff; background:#151518; box-shadow: inset 0 0 0 1px #26262a; }
+
+    main { padding:16px; max-width:1200px; margin:0 auto; }
+    h2, p { font-family:'Overspray', system-ui, -apple-system, Segoe UI, Roboto, sans-serif; letter-spacing:.2px; font-weight:400; }
+    #home h2 { margin: 16px 0 6px; }
+    #home p { margin: 0 0 12px; opacity: .95; }
+
+    /* HERO: show full image on RGB(185,185,185) without cropping */
+    .hero-box {
+      background: rgb(185,185,185);
+      border-radius: 14px;
+      padding: 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.35);
+      max-width: 900px;
+      margin: 16px auto 0;
+    }
+    .hero-box img {
+      display:block;
+      width: 100%;
+      height: auto;
+      object-fit: contain;
+      background: rgb(185,185,185);
+      border-radius: 10px;
+    }
+
+    /* Grid: preserve square tiles, but NEVER crop images */
+    .grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(220px,1fr)); gap:14px; }
+    .card {
+      aspect-ratio: 1 / 1;
+      background: rgb(185,185,185);
+      border-radius:10px;
+      overflow:hidden;
+      box-shadow: 0 2px 10px rgba(0,0,0,.25);
+      display:flex; align-items:center; justify-content:center;
+      padding: 6px;
+    }
+    .card img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;   /* full image visible */
+      background: rgb(185,185,185);
+      display:block;
+      border-radius:6px;
+    }
+
+    .status { text-align:center; opacity:.9; padding:18px 10px; font-size:0.95rem; }
+    .hidden { display:none; }
+  
+header h1, nav a, h2, p {
+  font-family:'Overspray', system-ui, sans-serif;
+  font-weight: 400;
+  font-style: normal;
+  font-synthesis: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+#home h2, #home p {
+  line-height: 1.3;
+  margin: 0.5em 0;
+}
+
+</style>
+</head>
+<body>
+  <header>
+    <img src="heavy-duty.png" alt="Heavy Duty Productions Logo">
+    <h1>Heavy Duty Productions</h1>
+  </header>
+
+  <nav aria-label="Primary">
+    <a class="tab" href="#/">HOME</a>
+    <a class="tab" href="#/hoodies">HOODIES</a>
+    <a class="tab" href="#/tshirts">T-SHIRTS</a>
+    <a class="tab" href="#/production-images">PRODUCTION IMAGES</a>
+  </nav>
+
+  <main>
+    <!-- HOME with welcome message + hero (no cropping) -->
+    <section id="home">
+      <h2>Welcome</h2>
+      <p>Choose a category above to browse images.</p>
+      <div class="hero-box">
+        <img class="hero" src="heavy-duty.png" alt="Heavy Duty Productions Hero">
+      </div>
+    </section>
+
+    <!-- GALLERY -->
+    <section id="gallery" class="hidden">
+      <div id="status" class="status">Loading…</div>
+      <div class="grid" id="imageGrid"></div>
+      <div id="emptyMsg" class="status hidden">No images found.</div>
+    </section>
+  </main>
+
+  <script>
+    // RELATIVE, CASE-SENSITIVE folder paths
+    const FOLDERS = {
+      hoodies: "./Hoodies/",
+      tshirts: "./T-Shirts/",
+      "production-images": "./Production Images/"
+    };
+
+    // If you have a FILES mapping baked in (from the fixed build), we prefer that (ZERO-SCAN).
+    // Otherwise, we fall back to a *very* light scan (max 200) to avoid rate limits.
+    const FILES = window.FILES || {
+      hoodies: [],
+      tshirts: [],
+      "production-images": []
+    };
+
+    const EXTS = [".JPG",".jpg",".JPEG",".jpeg",".PNG",".png",".webp"];
+    const BUILD = Date.now();
+    const MAX_SCAN = 200;   // safety limit if FILES is empty
+    const PARALLEL = 4;     // gentle to avoid throttling
+    const GAP_AFTER_HITS = 8;
+
+    const home = document.getElementById("home");
+    const gallery = document.getElementById("gallery");
+    const grid = document.getElementById("imageGrid");
+    const status = document.getElementById("status");
+    const emptyMsg = document.getElementById("emptyMsg");
+
+    function setActive(route){
+      document.querySelectorAll("nav a.tab").forEach(a => {
+        if (a.getAttribute("href") === route) a.setAttribute("aria-current","page");
+        else a.removeAttribute("aria-current");
+      });
+    }
+
+    function encPath(path){
+      return path.split("/").filter(Boolean).map(encodeURIComponent).join("/") + (path.endsWith("/")?"/":"");
+    }
+
+    function addCard(url){
+      const img = document.createElement("img");
+      img.loading = "lazy";
+      img.decoding = "async";
+      img.alt = url.split("/").pop();
+      img.src = url;
+      const card = document.createElement("div");
+      card.className = "card";
+      card.appendChild(img);
+      grid.appendChild(card);
+    }
+
+    function renderFromList(key){
+      grid.innerHTML = "";
+      const list = FILES[key] || [];
+      if (!list.length){ emptyMsg.classList.remove("hidden"); status.classList.add("hidden"); return; }
+      emptyMsg.classList.add("hidden");
+      const folder = encPath(FOLDERS[key]);
+      for (const name of list){
+        addCard(`${folder}${encodeURIComponent(name)}?v=${BUILD}`);
+      }
+      status.classList.add("hidden");
+    }
+
+    // Minimal sequential scan (only if FILES list is empty)
+    async function tryIndex(folderEnc, i){
+      const base = "IMG_" + String(i).padStart(4,"0");
+      for (const ext of EXTS){
+        const url = `${folderEnc}${base}${ext}?v=${BUILD}`;
+        const ok = await new Promise(res => {
+          const im = new Image();
+          im.onload = () => res(true);
+          im.onerror = () => res(false);
+          im.decoding = "async";
+          im.src = url;
+        });
+        if (ok) return url;
+      }
+      return null;
+    }
+
+    async function lightScan(key){
+      const folderEnc = encPath(FOLDERS[key]);
+      grid.innerHTML = "";
+      emptyMsg.classList.add("hidden");
+      status.classList.remove("hidden");
+
+      let next = 1, hits = 0, misses = 0, stop = false;
+      async function worker(){
+        while (!stop && next <= MAX_SCAN){
+          const cur = next++;
+          const found = await tryIndex(folderEnc, cur);
+          if (found){ addCard(found); hits++; misses = 0; }
+          else if (hits > 0){ misses++; if (misses >= GAP_AFTER_HITS) stop = true; }
+        }
+      }
+      await Promise.all(Array.from({length: PARALLEL}, () => worker()));
+
+      status.classList.add("hidden");
+      if (!hits) emptyMsg.classList.remove("hidden");
+    }
+
+    function showHome(){
+      setActive("#/");
+      home.classList.remove("hidden");
+      gallery.classList.add("hidden");
+    }
+
+    function showGallery(key){
+      setActive(`#/${key}`);
+      home.classList.add("hidden");
+      gallery.classList.remove("hidden");
+      if ((FILES[key] || []).length){ renderFromList(key); }
+      else { lightScan(key); }
+    }
+
+    function route(){
+      const hash = (location.hash || "#/");
+      if (hash === "#/" || hash === "#") return showHome();
+      if (hash.startsWith("#/hoodies")) return showGallery("hoodies");
+      if (hash.startsWith("#/tshirts")) return showGallery("tshirts");
+      if (hash.startsWith("#/production-images")) return showGallery("production-images");
+      return showHome();
+    }
+
+    document.addEventListener("DOMContentLoaded", route);
+    window.addEventListener("hashchange", route);
+  </script>
+</body>
+</html>
